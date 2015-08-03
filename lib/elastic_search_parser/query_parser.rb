@@ -1,5 +1,5 @@
 module ElasticSearchParser
-  class Read
+  class QueryParser
     extend Memoist
     QUERY_OPERATIONS = %i(lte lt gte gt term terms query prefix missing exists)
     attr_reader :result
@@ -214,14 +214,3 @@ module ElasticSearchParser
     end; memoize :nested_fields
   end
 end
-
-# if __FILE__ == $0
-#   puts ElasticSearchParser::Read.new(['first_name = ?', 1]).process.inspect
-#   puts ElasticSearchParser::Read.new(['first_name = ? and last_name = ?', 1, 2]).process.inspect
-#   puts ElasticSearchParser::Read.new(['(first_name = ? and last_name = ?)', 1, 2]).process.inspect
-#   puts ElasticSearchParser::Read.new(['(first_name = ? and city = ?)', 1, 2]).process.inspect
-#   puts ElasticSearchParser::Read.new(['first_name = ? and (state = ? or state = ?)', 1, 2, 3]).process.inspect
-#   puts ElasticSearchParser::Read.new(['city = ? and (state = ? or state = ?)', 1, 2, 3]).process.inspect
-#   puts ElasticSearchParser::Read.new(['first_name = ? and (last_name = ? or last_name = ? and (city = ? or city = ?))', 1, 2, 3, 4, 5]).process.inspect
-#
-# end
