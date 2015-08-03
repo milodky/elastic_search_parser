@@ -22,6 +22,7 @@ module ElasticSearchParser
   
     def parse_or(dsl, top = true)
       should = dsl.split(/ or /i).map { |or_clause| self.parse_and(or_clause, top) }.reject(&:blank?)
+      # TODO: check the size == 0
       should.size == 1 ? should[0] : {:bool => {:should => should}}
     end
   
@@ -40,10 +41,12 @@ module ElasticSearchParser
       end
 
       must = must.uniq.reject(&:blank?)
-
+      # TODO: check the size == 0
       must.size == 1 ? must[0] : {:bool => {:must => must}}
     end
 
+    #
+    # TODO: still can be optimized
     def nest_query_objects(field, query)
       case query
         when Array
