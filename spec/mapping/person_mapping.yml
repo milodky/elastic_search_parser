@@ -1,0 +1,14 @@
+schema:
+  first_name: String
+  last_name:  String
+  locations: Array[Hash]
+
+searchable_fields:
+  first_name: first_name
+  last_name:  last_name
+  location:
+    nested: true
+    path: locations
+    fields:
+      city:  city
+      state: state
