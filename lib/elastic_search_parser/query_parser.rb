@@ -2,7 +2,7 @@ module ElasticSearchParser
   class QueryParser
     extend Memoist
     QUERY_OPERATIONS = %i(lte lt gte gt term terms query prefix missing exists)
-    attr_reader :result
+    attr_reader :result, :routings, :index
     def initialize(conditions, options = {})
       raise ArgumentError.new('Input must be an array!') unless conditions.is_a?(Array)
       @dsl = conditions[0]
@@ -11,27 +11,54 @@ module ElasticSearchParser
       @cache               = {}
       # TODO: need to add the routings
       @routings            = []
+      @indexes             = []
       @question_mark_count = 0
       @options             = options.with_indifferent_access
-      @result              = process
+      @result              = self.process
+      @routings.clear     if @routings.include?(nil)
+      @routing             = @routings.uniq.join(',')
+      puts @routing.inspect
+      @index               = @indexes.uniq.join(',')
     end
     def process
       return {} if (dsl = self.parse_dsl(@dsl)).blank?
-      self.parse_or(dsl)
+      params = {:indexes => @indexes, :routings => @routings, :top => true}
+      self.parse_or(dsl, params)
     end
   
-    def parse_or(dsl, top = true)
-      should = dsl.split(/ or /i).map { |or_clause| self.parse_and(or_clause, top) }.reject(&:blank?)
+    def parse_or(dsl, params)
+      should = dsl.split(/ or /i).map do |or_clause|
+        or_params = {:routings => [], :indexes => [], :top => params[:top]}
+        ret = self.parse_and(or_clause, or_params)
+        [:routings, :indexes].each { |key| params[key].replace(params[key] + or_params[key]) }
+        ret
+      end.reject(&:blank?)
       # TODO: check the size == 0
       should.size == 1 ? should[0] : {:bool => {:should => should}}
     end
   
-    def parse_and(or_clause, top)
+    def parse_and(or_clause, params)
       must = or_clause.split(/ and /i).map(&:strip).map do |and_clause|
-        @cache[and_clause] ? self.parse_or(@cache[and_clause], false) : self.translate(and_clause)
+        and_params = {:routings => [], :indexes => []}
+        ret = @cache[and_clause] ?
+            self.parse_or(@cache[and_clause], and_params) : self.translate(and_clause, and_params)
+        [:routings, :indexes].each do |key|
+          next if and_params[key].blank?
+          if params[key].blank?
+            params[key].replace(params[key] + and_params[key])
+          else
+            params[key].replace(params[key] & and_params[key])
+          end
+        end
+
+        ret
       end
+
+      # add routing and index here
+
+
       # add the nested query here
-      if top
+      if params[:top]
         must += self.nested_fields.map do |nested_field|
           nested = self.nest_query_objects(nested_field, must)
           next if nested.blank?
@@ -73,9 +100,8 @@ module ElasticSearchParser
       ret
     end
   
-    def translate(and_clause)
+    def translate(and_clause, params)
       key, value = and_clause.squeeze(' ').split(/>=|<=|=|<|>| between | in | begins_with | like | is /i).map(&:strip)
-      key        = self.searchable_fields[key]
       value1     = nil
       if value =~ / between /i
         if value =~ /\? between \?/i
@@ -100,38 +126,55 @@ module ElasticSearchParser
         value = @values[@question_mark_count]
         @question_mark_count += 1 
       end
-      self.add_routing(key, value, value1)
 
-      case and_clause
-        when />=/             then {:range => {key => {:gte => value}}}
-        when /<=/             then {:range => {key => {:lte => value}}}
-        when /</              then {:range => {key => {:lt  => value}}}
-        when />/              then {:range => {key => {:gt  => value}}}
-        when / between /i     then {:range => {key => {:gte => value, :lte => value1}}}
-        when / begins_with /i then {:prefix => {key => value}}
-        when / like /i        then {:query => {:fuzzy => {key => value}}}
-        when /=| in | is /
-          value = value[0] if value.is_a?(Array) && value.size == 1
-          if value.is_a?(Array)
-            {:terms => {key => value}}
-          elsif value =~ /^null$/i
-            {:missing => {:field => value}}
-          elsif value =~ /^not null$/i
-            {:exists  => {:field => value}}
+      key = self.searchable_fields[key]
+      ret =
+        case and_clause
+          when />=/             then {:range => {key => {:gte => value}}}
+          when /<=/             then {:range => {key => {:lte => value}}}
+          when /</              then {:range => {key => {:lt  => value}}}
+          when />/              then {:range => {key => {:gt  => value}}}
+          when / between /i     then {:range => {key => {:gte => value, :lte => value1}}}
+          when / begins_with /i then {:prefix => {key => value}}
+          when / like /i        then {:query => {:fuzzy => {key => value}}}
+          when /=| in | is /
+            value = value[0] if value.is_a?(Array) && value.size == 1
+            if value.is_a?(Array)
+              {:terms => {key => value}}
+            elsif value =~ /^null$/i
+              {:missing => {:field => value}}
+            elsif value =~ /^not null$/i
+              {:exists  => {:field => value}}
+            else
+              {:term => {key => value}}
+            end
           else
-            {:term => {key => value}}
-          end
-        else
-          raise ArgumentError.new('Undefined operation!')
-      end
-
+            raise ArgumentError.new('Undefined operation!')
+        end
+      self.add_routing(ret, params)
+      ret
     rescue => err
       puts err.message
       puts err.backtrace
       raise ArgumentError.new('Cannot parse the input!')
     end
   
-    def add_routing(key, value, value1)
+    def add_routing(query, params)
+      sub_query =
+          case
+            when query[:range] then query[:range]
+            when query[:prefix] || query[:terms] || query[:term] || query[:query]
+              operator, data = (query || query[:query]).to_a[0]
+              key, value = data.to_a[0]
+
+              {key => {operator => value}}.with_indifferent_access
+            else nil
+          end
+      return if sub_query.blank?
+
+      routings           = Configuration.query_routing(sub_query, @options[:elastic_search])
+      return if routings.nil?
+      params[:routings] += routings.blank? ? [nil] : routings
     end
   
     # return is an array
@@ -190,7 +233,7 @@ module ElasticSearchParser
 
     def searchable_fields
       ret = HashWithIndifferentAccess.new
-      @options[:searchable_fields].each do |key, value|
+      @options[:elastic_search][:searchable_fields].each do |key, value|
         case value
           when Array, String
             ret[key] = value
@@ -211,7 +254,7 @@ module ElasticSearchParser
       raise ArgumentError.new('Failed to parse the searchable_fields!')
     end; memoize :searchable_fields
     def nested_fields
-      @options[:searchable_fields].map do |key, value|
+      @options[:elastic_search][:searchable_fields].map do |key, value|
         key if value.is_a?(Hash)
       end.compact
     end; memoize :nested_fields

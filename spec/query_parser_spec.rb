@@ -5,18 +5,18 @@ describe 'parse query conditions' do
     expect(ret.result).to eql({:term=>{"first_name"=>1}})
   end
   it 'should return the correct result when there are two fields queried no nested fields' do
-    ret = ElasticSearchParser::QueryParser.new(['first_name = ? and last_name = ?', 1, 2], PERSON_MAPPING)
-    expect(ret.result).to eql({:bool=>{:must=>[{:term=>{"first_name"=>1}}, {:term=>{"last_name"=>2}}]}})
+    ret = ElasticSearchParser::QueryParser.new(['first_name = ? and last_name = ?', 'david', 'williams'], PERSON_MAPPING)
+    expect(ret.result).to eql({:bool=>{:must=>[{:term=>{"first_name"=>'david'}}, {:term=>{"last_name"=>'williams'}}]}})
   end
 
   it 'should return the correct result when there are brackets and no nested fields' do
-    ret = ElasticSearchParser::QueryParser.new(['(first_name = ? and last_name = ?)', 1, 2], PERSON_MAPPING)
-    expect(ret.result).to eql({:bool=>{:must=>[{:term=>{"first_name"=>1}}, {:term=>{"last_name"=>2}}]}})
+    ret = ElasticSearchParser::QueryParser.new(['(first_name = ? and last_name = ?)', 1, 'williams'], PERSON_MAPPING)
+    expect(ret.result).to eql({:bool=>{:must=>[{:term=>{"first_name"=>1}}, {:term=>{"last_name"=>'williams'}}]}})
   end
 
   it 'should return the correct result when there are brackets around one or operation and no nested fields' do
-    ret = ElasticSearchParser::QueryParser.new(['first_name = ? and (last_name = ? or last_name = ?)', 1, 2, 3], PERSON_MAPPING)
-    expect(ret.result).to eql({:bool=>{:must=>[{:term=>{"first_name"=>1}}, {:bool=>{:should=>[{:term=>{"last_name"=>2}}, {:term=>{"last_name"=>3}}]}}]}})
+    ret = ElasticSearchParser::QueryParser.new(['first_name = ? and (last_name = ? or last_name = ?)', 1, 'smith', 'williams'], PERSON_MAPPING)
+    expect(ret.result).to eql({:bool=>{:must=>[{:term=>{"first_name"=>1}}, {:bool=>{:should=>[{:term=>{"last_name"=>  'smith'}}, {:term=>{"last_name"=> 'williams'}}]}}]}})
   end
 
   it 'should return the correct result when there is no bracket and one nested field' do

@@ -8,8 +8,8 @@ Gem::Specification.new do |spec|
   spec.version       = ElasticSearchParser::VERSION
   spec.authors       = ["Xiaoting"]
   spec.email         = ["yext4011@gmail.com"]
-  spec.summary       = %q{TODO: Write a short summary. Required.}
-  spec.description   = %q{TODO: Write a longer description. Optional.}
+  spec.summary       = %q{a light-weight elastic search parser.}
+  spec.description   = %q{a light-weight elastic search parser.}
   spec.homepage      = ""
   spec.license       = "MIT"
 
@@ -21,4 +21,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "bundler", "~> 1.6"
   spec.add_development_dependency "rake"
   spec.add_dependency 'memoist'
+  spec.add_dependency 'andand'
+  spec.add_dependency 'rspec'
+  spec.add_dependency 'activesupport'
 end

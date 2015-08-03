@@ -3,12 +3,36 @@ schema:
   last_name:  String
   locations: Array[Hash]
 
-searchable_fields:
-  first_name: first_name
-  last_name:  last_name
-  location:
-    nested: true
-    path: locations
-    fields:
-      city:  city
-      state: state
+elastic_search:
+  searchable_fields:
+    first_name: first_name
+    last_name:  last_name
+    location:
+      nested: true
+      path: locations
+      fields:
+        city:  city
+        state: state
+  sharding:
+     type: c
+     index:
+       key:   last_name
+       range: 0...1
+       key_for_index_sharding: "'a'..'z'"
+     routing:
+       key:   last_name
+       range: 0...3
+  routing: 3
+  default_fuzzy_expasions: 32
+
+  mapping:
+     _routing:
+       required: true
+       path:     shard_key
+     properties:
+       first_name:
+         type: string
+         index: not_analyzed
+       last_name:
+          type: string
+          index: not_analyzed
