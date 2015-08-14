@@ -2,7 +2,7 @@ module ElasticSearchParser
   class QueryParser
     extend Memoist
     QUERY_OPERATIONS = %i(lte lt gte gt term terms query prefix missing exists)
-    attr_reader :query, :routings, :index
+    attr_reader :query, :routing, :index
     def initialize(conditions, options = {})
       raise ArgumentError.new('Input must be an array!') unless conditions.is_a?(Array)
       @dsl = conditions[0]
@@ -17,7 +17,6 @@ module ElasticSearchParser
       @query               = self.process
       @routings.clear     if @routings.include?(nil)
       @routing             = @routings.uniq.join(',')
-      puts @routing.inspect
       @index               = @indexes.uniq.join(',')
     end
     def process
