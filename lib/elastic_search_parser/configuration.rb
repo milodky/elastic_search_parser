@@ -24,9 +24,11 @@ module ElasticSearchParser
           end
       Array(ret).map do |val|
         final_key = eval(index_config['key_for_index_sharding']).cover?(val[range]) ? val[range] : index_config['default_key']
-        "#{self.type}#{final_key}"
+        "#{self.type(params)}#{final_key}"
       end
-    rescue
+    rescue => err
+      puts err.message
+      puts err.backtrace
       raise ArgumentError.new('Failed to generate the index for query!')
     end
 
@@ -81,7 +83,7 @@ module ElasticSearchParser
     end
 
     def self.default_query_index(params)
-      eval(params['sharding']['index']['key_for_index_sharding']).to_a.map{|k| "#{self.type}#{k}"}
+      eval(params['sharding']['index']['key_for_index_sharding']).to_a.map{|k| "#{self.type(params)}#{k}"}
     end
 
     #############################################################
@@ -94,7 +96,7 @@ module ElasticSearchParser
       raise ArgumentError.new('Cannot get the index for transaction!') if entry_hash[key].blank?
       final_key = eval(index_config['key_for_index_sharding']).cover?(entry_hash[key][range]) ?
           entry_hash[key][range] : index_config['default_key']
-      "#{self.type}#{final_key}"
+      "#{self.type(params)}#{final_key}"
     end
 
     def self.transaction_routing(entry_hash, params)

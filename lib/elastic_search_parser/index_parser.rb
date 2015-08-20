@@ -5,6 +5,7 @@ module ElasticSearchParser
     # mapping format when indexing the documents
     def initialize(entry_hash, options)
       @options    = options.with_indifferent_access
+      @es_options = @options[:elastic_search]
       @entry_hash = entry_hash.with_indifferent_access
       @items      = self.process
     end
@@ -14,7 +15,7 @@ module ElasticSearchParser
 
       self.final_value
     rescue => err
-      raise ArgumentError.new("Cannot generate the document: #{err.message}")
+      raise ArgumentError.new("Error when generating the document: #{err.message}")
     end
 
     #############################################################
@@ -23,9 +24,9 @@ module ElasticSearchParser
     #
     def middle_value
       ret = HashWithIndifferentAccess.new
-      @options[:elastic_search].each do |field, config|
-        if @options[:user_defined_index].andand[field]
-          ret = @options[:user_defined_index].andand[field].call(@entry_hash)
+      @es_options[:searchable_fields].each do |field, config|
+        if @es_options[:user_defined_index].andand[field]
+          ret = @es_options[:user_defined_index].andand[field].call(@entry_hash)
           next
         end
         case config
@@ -59,13 +60,14 @@ module ElasticSearchParser
     #
     def final_value
       middle_value = self.middle_value
-      shard_key    = @options[:sharding][:index]
+      shard_key    = @es_options[:sharding][:index][:key]
       Array(middle_value.delete(shard_key)).map do |shard_value|
         data    = middle_value.merge(shard_key => shard_value)
-        index   = Configuration.transaction_index({shard_key => shard_value}, @options)
-        type    = Configuration.type(@options)
-        id      = Configuration.document_id(data, @options)
-        routing = Configuration.transaction_routing(data, @options)
+        index   = Configuration.transaction_index({shard_key => shard_value}, @es_options)
+        type    = Configuration.type(@es_options)
+        #TODO: id haven't been added yet
+        id      = Configuration.document_id(data, @es_options)
+        routing = Configuration.transaction_routing(data, @es_options)
         {:data => data, :_index => index, :_type => type, :_routing => routing, :_id => id}.delete_if{|_, v| v.blank?}
       end
     end

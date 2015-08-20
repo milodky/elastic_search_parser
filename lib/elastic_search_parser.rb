@@ -5,6 +5,7 @@ require 'memoist'
 require 'andand'
 require 'elastic_search_parser/configuration'
 require 'elastic_search_parser/query_parser'
+require 'elastic_search_parser/index_parser'
 module ElasticSearchParser
   # Your code goes here...
 end
