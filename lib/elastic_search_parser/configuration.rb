@@ -108,6 +108,23 @@ module ElasticSearchParser
       entry_hash[path] = value
     end
 
+    def self.url(index, params)
+      case params['endpoint']
+        when String
+          return params['endpoint']
+        when Hash
+          if index.size > 1
+            params['endpoint']['tribe']
+          else
+            params['endpoint'][index[0]]
+          end
+        else
+          nil
+      end
+    rescue
+      raise InvalidEndpoint
+    end
+
 
 
   end
