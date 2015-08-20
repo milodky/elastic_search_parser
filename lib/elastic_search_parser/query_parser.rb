@@ -18,7 +18,7 @@ module ElasticSearchParser
       @routings.clear if @routings.include?(nil)
       @routing             = @routings.uniq.join(',')
       @index               = @indexes.uniq.join(',')
-      @body                = {:query => @query}
+      @body                = {:query => {:filtered => {:filter => @query}}}
       @url = Configuration.url(@indexes, @options[:elastic_search])
     end
     def process
