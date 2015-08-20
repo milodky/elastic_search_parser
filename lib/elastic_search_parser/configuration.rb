@@ -109,14 +109,14 @@ module ElasticSearchParser
     end
 
     def self.url(index, params)
-      case params['endpoint']
+      case params['url']
         when String
-          return params['endpoint']
+          return params['url']
         when Hash
           if index.size > 1
-            params['endpoint']['tribe']
+            params['url']['tribe']
           else
-            params['endpoint'][index[0]]
+            params['url'][index[0]]
           end
         else
           nil
