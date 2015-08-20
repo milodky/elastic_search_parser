@@ -1,5 +1,13 @@
 module ElasticSearchParser
   module Configuration
+    # get the type
+    def self.type(params)
+      params[:sharding][:type]
+    end
+
+    def self.document_id(entry_hash, params)
+
+    end
     # this module generates the search and index params(index, routing, type etc)
     def self.query_index(conditions, params)
       index_config = params['sharding']['index']
@@ -12,12 +20,14 @@ module ElasticSearchParser
           if value.is_a?(Array) || value.is_a?(String)
             conditions[key]
           elsif value.is_a?(Hash)
-            self.prefix_key(value, range) || self.fuzzy_key(value, range) || self.range_key(value, range, params)
+            self.term_key(value) || self.prefix_key(value, range) || self.fuzzy_key(value, range) || self.range_key(value, range, params)
           end
       Array(ret).map do |val|
         final_key = eval(index_config['key_for_index_sharding']).cover?(val[range]) ? val[range] : index_config['default_key']
         "#{self.type}#{final_key}"
-      end.uniq.join
+      end
+    rescue
+      raise ArgumentError.new('Failed to generate the index for query!')
     end
 
     def self.query_routing(conditions, params)
@@ -70,12 +80,9 @@ module ElasticSearchParser
       value['fuzzy']
     end
 
-
     def self.default_query_index(params)
       eval(params['sharding']['index']['key_for_index_sharding']).to_a.map{|k| "#{self.type}#{k}"}
     end
-
-
 
     #############################################################
     #
@@ -89,9 +96,6 @@ module ElasticSearchParser
           entry_hash[key][range] : index_config['default_key']
       "#{self.type}#{final_key}"
     end
-
-
-
 
     def self.transaction_routing(entry_hash, params)
       return if params['mapping'].andand['_routing'].blank?

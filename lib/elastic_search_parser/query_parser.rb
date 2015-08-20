@@ -17,7 +17,6 @@ module ElasticSearchParser
       @result              = self.process
       @routings.clear     if @routings.include?(nil)
       @routing             = @routings.uniq.join(',')
-      puts @routing.inspect
       @index               = @indexes.uniq.join(',')
     end
     def process
@@ -151,7 +150,7 @@ module ElasticSearchParser
           else
             raise ArgumentError.new('Undefined operation!')
         end
-      self.add_routing(ret, params)
+      self.update_query_params(ret, params)
       ret
     rescue => err
       puts err.message
@@ -159,7 +158,7 @@ module ElasticSearchParser
       raise ArgumentError.new('Cannot parse the input!')
     end
   
-    def add_routing(query, params)
+    def update_query_params(query, params)
       sub_query =
           case
             when query[:range] then query[:range]
@@ -173,9 +172,12 @@ module ElasticSearchParser
       return if sub_query.blank?
 
       routings           = Configuration.query_routing(sub_query, @options[:elastic_search])
+      params[:indexes]   = Configuration.query_index(sub_query, @options[:elastic_search])
+
       return if routings.nil?
       params[:routings] += routings.blank? ? [nil] : routings
     end
+
   
     # return is an array
     def parse_dsl(dsl)
@@ -188,14 +190,13 @@ module ElasticSearchParser
       ret = []
       i   = 0
       begin
-        if dsl[i] != '('
-          i += 1
-          next
-        end
+        # next if it's not a bracket
+        next if dsl[i] != '(' && (i += 1)
+
         # find the corresponding right bracket
         right_bracket_index = corresponding_right_bracket_index(dsl, i)
-        replacing_string   = self.random_string
-        internal_dsl       = self.parse_dsl(dsl[(i + 1)...right_bracket_index])
+        replacing_string    = self.random_string
+        internal_dsl        = self.parse_dsl(dsl[(i + 1)...right_bracket_index])
         ret << dsl[(last_right_index + 1)...i]
         ret << replacing_string
         i = right_bracket_index + 1
@@ -239,10 +240,16 @@ module ElasticSearchParser
             ret[key] = value
           when Hash
             # everything that contains a dot will be regarded as a nested field
-            value[:fields].each_key do |nested_key|
-              ret[nested_key]             = "#{key}.#{nested_key}"
-              ret["#{key}.#{nested_key}"] = "#{key}.#{nested_key}"
+            # TODO: need to update the code here
+            if value[:nested]
+              value[:fields].each_key do |nested_key|
+                ret[nested_key]             = "#{key}.#{nested_key}"
+                ret["#{key}.#{nested_key}"] = "#{key}.#{nested_key}"
+              end
+            else
+              ret[key] = value[:field]
             end
+
           else
             raise ArgumentError
         end
@@ -255,7 +262,7 @@ module ElasticSearchParser
     end; memoize :searchable_fields
     def nested_fields
       @options[:elastic_search][:searchable_fields].map do |key, value|
-        key if value.is_a?(Hash)
+        key if value.is_a?(Hash) && value[:nested]
       end.compact
     end; memoize :nested_fields
   end

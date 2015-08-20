@@ -2,6 +2,7 @@ schema:
   first_name: String
   last_name:  String
   locations: Array[Hash]
+  phones:    Array[Hash]
 
 elastic_search:
   searchable_fields:
@@ -13,6 +14,11 @@ elastic_search:
       fields:
         city:  city
         state: state
+    phone:
+      nested: false
+      path:   phones
+      field:  phone
+
   sharding:
      type: c
      index:
