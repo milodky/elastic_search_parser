@@ -195,7 +195,6 @@ module ElasticSearchParser
       begin
         # next if it's not a bracket
         next if dsl[i] != '(' && (i += 1)
-
         # find the corresponding right bracket
         right_bracket_index = corresponding_right_bracket_index(dsl, i)
         replacing_string    = self.random_string
@@ -204,8 +203,10 @@ module ElasticSearchParser
         ret << replacing_string
         i = right_bracket_index + 1
         @cache[replacing_string] = internal_dsl
+        last_right_index = right_bracket_index
       end while i < dsl.size
-      ret.join(' ')
+      ret << dsl[(last_right_index + 1)..i]
+      ret.reject(&:blank?).join(' ')
     end
     def valid_dsl?
       return unless @dsl.is_a?(String) || @dsl.empty?

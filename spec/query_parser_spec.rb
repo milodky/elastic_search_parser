@@ -29,6 +29,11 @@ describe 'parse query conditions' do
     expect(ret.query).to eql({:nested => {:path => 'location', :query => {:term=>{'location.city'=>1}}}})
   end
 
+  it 'should return the correct result when there is one nested field' do
+    ret = ElasticSearchParser::QueryParser.new(['(last_name = ? and first_name = ?) or first_name = ?', 'smith', 'john', 'david'], PERSON_MAPPING)
+    expect(ret.query).to eql({:bool=>{:should=>[ {:bool => {:must => [{:term=>{'last_name'=>'smith'}}, {:term=>{'first_name'=> 'john'}}]}}, {:term => {'first_name' => 'david'}}]}})
+  end
+
   it 'should return the correct result when there is no bracket and one nested field' do
     ret = ElasticSearchParser::QueryParser.new(['first_name = ? and (city = ? or city = ?)', 1, 2, 3], PERSON_MAPPING)
     expect(ret.query).to eql({:bool=> {:must=> [
