@@ -77,7 +77,7 @@ module ElasticSearchParser
     #############################################################
     # get the index/routing key for fuzzy query
     #
-    def fuzzy_key(value, range)
+    def self.fuzzy_key(value, range)
       return if params['thorough_fuzzy'] || value['fuzzy'].nil? || value['fuzzy'].size < range.last
       value['fuzzy']
     end
