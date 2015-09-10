@@ -52,7 +52,7 @@ module ElasticSearchParser
             params[key].replace(params[key] & and_params[key])
           end
         end
-
+        return if ret.blank?
         ret
       end
 
@@ -128,6 +128,7 @@ module ElasticSearchParser
         value = @values[@question_mark_count]
         @question_mark_count += 1 
       end
+      return if value.blank?
 
       key = self.searchable_fields[key]
       ret =
