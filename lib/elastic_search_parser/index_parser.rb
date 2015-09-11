@@ -12,7 +12,6 @@ module ElasticSearchParser
 
     def process
       return @options[:lambda].call(@entry_hash) if @options[:lambda]
-
       self.final_value
     rescue => err
       raise ArgumentError.new("Error when generating the document: #{err.message}")
@@ -32,13 +31,13 @@ module ElasticSearchParser
         case config
           when String
             raise ArgumentError.new("#{config} is not part of the schema") if self.schema[config].nil?
-            ret[field] = @entry_hash[config]
+            ret[field] = self.try_downcase(@entry_hash[config])
           when Array
             ret[field] = config.map do |f|
               raise ArgumentError.new("#{config} is not part of the schema") if self.schema[f].nil?
               next if @entry_hash[f].nil?
               Array(@entry_hash[f])
-            end.flatten
+            end.flatten.map{|t| self.try_downcase(t)}.compact
           when Hash
             object_field = config[:path]
             raise ArgumentError.new("#{config} is not part of the schema") if self.schema[object_field].nil?
@@ -76,9 +75,9 @@ module ElasticSearchParser
     def complex_object(object, config)
       if config[:nested]
         # returns a hash
-        {}.tap { |h| config[:fields].each { |k, v| h[k] = object[v] if object[v].present? } }
+        {}.tap { |h| config[:fields].each { |k, v| h[k] = self.try_downcase(object[v]) if object[v].present? } }
       else
-        object[config[:field]]
+        self.try_downcase( object[config[:field]])
       end
     end
 
@@ -89,6 +88,10 @@ module ElasticSearchParser
         end
       end
     end; memoize :schema
+
+    def try_downcase(t)
+      t.try(:downcase) || t
+    end
 
   end
 end

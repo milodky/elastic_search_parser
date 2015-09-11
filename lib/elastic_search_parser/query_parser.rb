@@ -1,6 +1,7 @@
 module ElasticSearchParser
   class QueryParser
     extend Memoist
+    include DSL::Parser
     QUERY_OPERATIONS = %i(lte lt gte gt term terms query prefix missing exists)
     attr_reader :query, :routing, :index, :body, :url
     def initialize(conditions, options = {})
@@ -73,7 +74,6 @@ module ElasticSearchParser
       # TODO: check the size == 0
       must.size == 1 ? must[0] : {:bool => {:must => must}}
     end
-
     #
     # TODO: still can be optimized
     def nest_query_objects(field, query)
@@ -101,7 +101,7 @@ module ElasticSearchParser
       end
       ret
     end
-  
+
     def translate(and_clause, params)
       key, value = and_clause.squeeze(' ').split(/>=|<=|=|<|>| between | in | begins_with | like | is /i).map(&:strip)
       value1     = nil
@@ -128,6 +128,8 @@ module ElasticSearchParser
         value = @values[@question_mark_count]
         @question_mark_count += 1 
       end
+
+      # return immediately if pass an empty string, array hash inside
       return if value.blank?
 
       key = self.searchable_fields[key]
@@ -161,7 +163,7 @@ module ElasticSearchParser
       puts err.backtrace
       raise ArgumentError.new('Cannot parse the input!')
     end
-  
+
     def update_query_params(query, params)
       sub_query =
           case
@@ -180,61 +182,6 @@ module ElasticSearchParser
 
       return if routings.nil?
       params[:routings] += routings.blank? ? [nil] : routings
-    end
-
-  
-    # return is an array
-    def parse_dsl(dsl)
-      while dsl[0] == '(' && dsl[-1] == ')'
-        dsl = dsl[1...-1] 
-      end
-      return dsl if dsl.count('(') == 0
-  
-      last_right_index = -1
-      ret = []
-      i   = 0
-      begin
-        # next if it's not a bracket
-        next if dsl[i] != '(' && (i += 1)
-        # find the corresponding right bracket
-        right_bracket_index = corresponding_right_bracket_index(dsl, i)
-        replacing_string    = self.random_string
-        internal_dsl        = self.parse_dsl(dsl[(i + 1)...right_bracket_index])
-        ret << dsl[(last_right_index + 1)...i]
-        ret << replacing_string
-        i = right_bracket_index + 1
-        @cache[replacing_string] = internal_dsl
-        last_right_index = right_bracket_index
-      end while i < dsl.size
-      ret << dsl[(last_right_index + 1)..i]
-      ret.reject(&:blank?).join(' ')
-    end
-    def valid_dsl?
-      return unless @dsl.is_a?(String) || @dsl.empty?
-      left_bracket_count = 0
-      @dsl.each_char do |c|
-        case c
-          when '(' then left_bracket_count += 1
-          when ')' then left_bracket_count -= 1
-        end
-        return if left_bracket_count < 0
-      end
-      true
-    end
-  
-    def corresponding_right_bracket_index(dsl, left_index)
-      left_bracket_count = 1
-      (left_index + 1).upto(dsl.size - 1) do |index|
-        case dsl[index]
-          when '(' then left_bracket_count += 1
-          when ')' then left_bracket_count -= 1
-        end
-        return index if left_bracket_count == 0
-      end
-    end
-  
-    def random_string
-      (0..10).map{('a'..'z').to_a.sample}.join
     end
 
     def searchable_fields
@@ -265,6 +212,7 @@ module ElasticSearchParser
       puts err.backtrace
       raise ArgumentError.new('Failed to parse the searchable_fields!')
     end; memoize :searchable_fields
+
     def nested_fields
       @options[:elastic_search][:searchable_fields].map do |key, value|
         key if value.is_a?(Hash) && value[:nested]

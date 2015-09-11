@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    elastic_search_parser (0.0.1)
+    elastic_search_parser (0.0.2)
       activesupport
       andand
       memoist
