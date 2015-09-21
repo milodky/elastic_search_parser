@@ -5,23 +5,28 @@ module ElasticSearchParser
     QUERY_OPERATIONS = %i(lte lt gte gt term terms query prefix missing exists)
     attr_reader :query, :routing, :index, :body, :url
     def initialize(conditions, options = {})
-      raise ArgumentError.new('Input must be an array!') unless conditions.is_a?(Array)
-      @dsl = conditions[0]
-      raise ArgumentError.new(' must be a valid string!') unless self.valid_dsl?
-      @values              = conditions.from(1)
-      @cache               = {}
-      # TODO: need to add the routings
-      @routings            = []
-      @indexes             = []
-      @question_mark_count = 0
-      @options             = options.dup.with_indifferent_access
-      @query               = self.process
-      @routings.clear if @routings.include?(nil)
-      @routing             = @routings.uniq.join(',') if @routings.present?
+      case conditions
+        when Array
+          @cache               = {}
+          # TODO: need to add the routings
+          @routings            = []
+          @indexes             = []
+          @dsl                 = conditions[0]
+          @values              = conditions.from(1)
+          raise ArgumentError.new(' must be a valid string!') unless self.valid_dsl?
+          @question_mark_count = 0
+          @options             = options.dup.with_indifferent_access
+          @query               = self.process
+          @body                = {:query => {:filtered => {:filter => @query}}}
+        when NilClass
+        else
+          raise ArgumentError.new('Input must be an array!')
+      end
 
-      @index               = @indexes.uniq.join(',')
-      @body                = {:query => {:filtered => {:filter => @query}}}
-      @url = Configuration.url(@indexes, @options[:elastic_search])
+      @routings.clear if @routings.include?(nil)
+      @routing = @routings.uniq.join(',') if @routings.present?
+      @index   = @indexes.uniq.join(',') if @indexes.present?
+      @url     = Configuration.url(@indexes, @options[:elastic_search])
     end
     def process
       return {} if (dsl = self.parse_dsl(@dsl)).blank?
