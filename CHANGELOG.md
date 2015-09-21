@@ -1,3 +1,6 @@
+=== 0.0.4
+ - added user-defined index
+
 === 0.0.3
  - added support for scan
 

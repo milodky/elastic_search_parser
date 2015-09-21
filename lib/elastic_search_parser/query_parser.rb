@@ -5,17 +5,16 @@ module ElasticSearchParser
     QUERY_OPERATIONS = %i(lte lt gte gt term terms query prefix missing exists)
     attr_reader :query, :routing, :index, :body, :url
     def initialize(conditions, options = {})
+      @cache               = {}
+      @routings            = []
+      @indexes             = []
+      @options             = options.dup.with_indifferent_access
       case conditions
         when Array
-          @cache               = {}
-          # TODO: need to add the routings
-          @routings            = []
-          @indexes             = []
           @dsl                 = conditions[0]
           @values              = conditions.from(1)
           raise ArgumentError.new(' must be a valid string!') unless self.valid_dsl?
           @question_mark_count = 0
-          @options             = options.dup.with_indifferent_access
           @query               = self.process
           @body                = {:query => {:filtered => {:filter => @query}}}
         when NilClass
@@ -25,7 +24,7 @@ module ElasticSearchParser
 
       @routings.clear if @routings.include?(nil)
       @routing = @routings.uniq.join(',') if @routings.present?
-      @index   = @indexes.uniq.join(',') if @indexes.present?
+      @index   = @options[:index] || @indexes.uniq.join(',')
       @url     = Configuration.url(@indexes, @options[:elastic_search])
     end
     def process
