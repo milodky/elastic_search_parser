@@ -21,8 +21,7 @@ module ElasticSearchParser
         else
           raise ArgumentError.new('The input is not valid!')
       end
-      @routings.clear if @routings.include?([])
-      @routings.flatten!
+      @routings.include?([]) ? @routings.clear : @routings.flatten!
       @routing = @routings.uniq.join(',') if @routings.present?
       @index   = @indexes.flatten.uniq.join(',') if @indexes.present?
       @url     = Configuration.url(@indexes, @options[:elastic_search])
