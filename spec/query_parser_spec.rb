@@ -27,6 +27,13 @@ describe 'parse query conditions' do
     expect(ret.index).to eql('cs,cw')
   end
 
+  it 'should return the correct result when there are brackets around one or operation and no nested fields' do
+    ret = ElasticSearchParser::QueryParser.new(['first_name = ? and (last_name = ? or last_name = ?)', ['Joshua', 'JOHN'], 'Smith', 'Williams'], PERSON_MAPPING)
+    expect(ret.query).to eql({:bool=>{:must=>[{:terms=>{'first_name'=>['joshua', 'john']}}, {:bool=>{:should=>[{:term=>{'last_name'=>  'smith'}}, {:term=>{'last_name'=> 'williams'}}]}}]}})
+    expect(ret.routing).to eql('smi,wil')
+    expect(ret.index).to eql('cs,cw')
+  end
+
   it 'should return the correct result when there is no bracket and one nested field' do
     ret = ElasticSearchParser::QueryParser.new(['first_name = ? and city = ?', 1, 2], PERSON_MAPPING)
     expect(ret.query).to eql({:bool=>{:must=>[{:term=>{'first_name'=>1}}, {:nested => {:path => 'location', :query => {:term=>{'location.city'=>2}}}}]}})

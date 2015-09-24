@@ -134,6 +134,9 @@ module ElasticSearchParser
         @question_mark_count += 1 
       end
 
+      value = Utility.try_downcase(value)
+      value1 = Utility.try_downcase(value1)
+
       # return immediately if pass an empty string, array hash inside
       return if value.blank?
 
