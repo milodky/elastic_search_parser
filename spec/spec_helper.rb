@@ -7,12 +7,17 @@ end
 
 def valid_person_mapping(opt = {})
   {
-      first_name: random_string,
-      last_name:  random_string,
+      id: random_string,
+      first_names: [random_string.upcase, random_string],
+      last_names:  [random_string, random_string.upcase],
       locations: [
           {
               state: random_string,
               city: random_string
+          },
+          {
+              state: random_string,
+              city: random_string.upcase
           }
       ]
   }.with_indifferent_access.merge(opt)

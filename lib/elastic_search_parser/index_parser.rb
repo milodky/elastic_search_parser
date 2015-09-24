@@ -1,6 +1,7 @@
 module ElasticSearchParser
   class IndexParser
     extend Memoist
+    attr_reader :items
     # this class generates the convert the object hash to the correct
     # mapping format when indexing the documents
     def initialize(entry_hash, options)
@@ -24,10 +25,8 @@ module ElasticSearchParser
     def middle_value
       ret = HashWithIndifferentAccess.new
       @es_options[:searchable_fields].each do |field, config|
-        if @es_options[:user_defined_index].andand[field]
-          ret = @es_options[:user_defined_index].andand[field].call(@entry_hash)
-          next
-        end
+        # if the user pass a block or lambda for generating the index
+        next if self.user_defined_index?(field, ret)
         case config
           when String
             raise ArgumentError.new("#{config} is not part of the schema") if self.schema[config].nil?
@@ -49,9 +48,17 @@ module ElasticSearchParser
               else
                 ret[field] = self.complex_object(@entry_hash, config)
             end
+          else
+            raise ArgumentError
         end
       end
       ret.delete_if{|_, v| v.blank?}
+    end
+
+    def user_defined_index?(field, ret)
+      return unless @es_options[:user_defined_index].andand[field]
+      ret[field] = @es_options[:user_defined_index].andand[field].call(@entry_hash)
+      true
     end
 
     #############################################################
@@ -64,7 +71,6 @@ module ElasticSearchParser
         data    = middle_value.merge(shard_key => shard_value)
         index   = Configuration.transaction_index({shard_key => shard_value}, @es_options)
         type    = Configuration.type(@es_options)
-        #TODO: id haven't been added yet
         id      = Configuration.document_id(data, @es_options)
         routing = Configuration.transaction_routing(data, @es_options)
         {:data => data, :_index => index, :_type => type, :_routing => routing, :_id => id}.delete_if{|_, v| v.blank?}
@@ -90,7 +96,7 @@ module ElasticSearchParser
     end; memoize :schema
 
     def try_downcase(t)
-      t.try(:downcase) || t
+      t.is_a?(Array) ? t.map{|k| try_downcase(k)} : (t.try(:downcase) || t)
     end
 
   end
