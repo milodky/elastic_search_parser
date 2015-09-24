@@ -50,7 +50,7 @@ module ElasticSearchParser
       return if params['mapping'].andand['_routing'].blank?
       query_key = conditions.keys[0]
       key       = params['sharding']['routing']['key']
-      return if query_key != key
+      return [] if query_key != key
       range = eval(params['sharding']['routing']['range'])
       value = conditions[key]
       ret   =
