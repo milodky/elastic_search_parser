@@ -45,6 +45,13 @@ describe 'generate document for indexing' do
     end
   end
 
+  it 'should have correct shard_key value' do
+    last_names = @p_hash[:last_names]
+    @items.each_with_index do |item, i|
+      expect(item[:data][:shard_key]).to eql(last_names[i][0, 3].downcase)
+    end
+  end
+
   it 'should have correct first_names' do
     first_names = @p_hash[:first_names]
     @items.each do |item|
@@ -65,7 +72,4 @@ describe 'generate document for indexing' do
 
     end
   end
-
-  # here I also need to test the routing and shard_key stuff
-
 end
