@@ -6,7 +6,21 @@ module ElasticSearchParser
     end
 
     def self.document_id(entry_hash, params)
-
+      ret =
+          case params[:_id]
+            when String then entry_hash[params[:_id]]
+            when Hash
+              config = params[:_id]
+              fields = config[:fields]
+              Array(fields).map{|key| entry_hash[key]}.join(params[:operators][config[:operator]])
+            when NilClass; return
+            else
+              raise ArgumentError
+          end
+      raise ArgumentError if ret.blank?
+      ret
+    rescue
+      raise ArgumentError.new("Failed to generate _id for configuration #{params[:_id].inspect} and data #{entry_hash}")
     end
     # this module generates the search and index params(index, routing, type etc)
     def self.query_index(conditions, params)
@@ -36,7 +50,7 @@ module ElasticSearchParser
       return if params['mapping'].andand['_routing'].blank?
       query_key = conditions.keys[0]
       key       = params['sharding']['routing']['key']
-      return if query_key != key
+      return [] if query_key != key
       range = eval(params['sharding']['routing']['range'])
       value = conditions[key]
       ret   =

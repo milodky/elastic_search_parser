@@ -1,13 +1,15 @@
 schema:
-  first_name: String
-  last_name:  String
+  id:         String
+  first_names: Array[String]
+  last_names: Array[String]
   locations: Array[Hash]
   phones:    Array[Hash]
 
 elastic_search:
   searchable_fields:
-    first_name: first_name
-    last_name:  last_name
+    id:         id
+    first_name: first_names
+    last_name:  last_names
     location:
       nested: true
       path: locations
@@ -42,3 +44,11 @@ elastic_search:
        last_name:
           type: string
           index: not_analyzed
+  _id:
+    # can either be a hash or a string or just nil which lets ElasticSearch generate the _id
+    fields:
+      - id
+      - last_name
+    operator: underscore
+  operators:
+    underscore: _

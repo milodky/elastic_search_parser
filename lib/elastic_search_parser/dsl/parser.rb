@@ -7,15 +7,16 @@ module ElasticSearchParser
         dsl = dsl[1...-1]
       end
       return dsl if dsl.count('(') == 0
-
+      @cache           = {}
       last_right_index = -1
       ret = []
       i   = 0
+
       begin
         # next if it's not a bracket
         next if dsl[i] != '(' && (i += 1)
         # find the corresponding right bracket
-        right_bracket_index = corresponding_right_bracket_index(dsl, i)
+        right_bracket_index = corresponding_right_bracket(dsl, i)
         replacing_string    = self.random_string
         internal_dsl        = self.parse_dsl(dsl[(i + 1)...right_bracket_index])
         ret << dsl[(last_right_index + 1)...i]
@@ -40,7 +41,7 @@ module ElasticSearchParser
       true
     end
 
-    def corresponding_right_bracket_index(dsl, left_index)
+    def corresponding_right_bracket(dsl, left_index)
       left_bracket_count = 1
       (left_index + 1).upto(dsl.size - 1) do |index|
         case dsl[index]

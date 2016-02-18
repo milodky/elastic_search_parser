@@ -19,12 +19,11 @@ module ElasticSearchParser
           @body                = {:query => {:filtered => {:filter => @query}}}
         when NilClass
         else
-          raise ArgumentError.new('Input must be an array!')
+          raise ArgumentError.new('The input is not valid!')
       end
-
-      @routings.clear if @routings.include?(nil)
+      @routings.include?([]) ? @routings.clear : @routings.flatten!
       @routing = @routings.uniq.join(',') if @routings.present?
-      @index   = @options[:index] || @indexes.uniq.join(',')
+      @index   = @indexes.flatten.uniq.join(',') if @indexes.present?
       @url     = Configuration.url(@indexes, @options[:elastic_search])
     end
     def process
@@ -37,7 +36,12 @@ module ElasticSearchParser
       should = dsl.split(/ or /i).map do |or_clause|
         or_params = {:routings => [], :indexes => [], :top => params[:top]}
         ret = self.parse_and(or_clause, or_params)
-        [:routings, :indexes].each { |key| params[key].replace(params[key] + or_params[key]) }
+        if params[:top]
+          params[:routings] << or_params[:routings]
+        else
+          params[:routings] += or_params[:routings]
+        end
+        params[:indexes].replace(params[:indexes] + or_params[:indexes])
         ret
       end.reject(&:blank?)
       # TODO: check the size == 0
@@ -60,9 +64,6 @@ module ElasticSearchParser
         return if ret.blank?
         ret
       end
-
-      # add routing and index here
-
 
       # add the nested query here
       if params[:top]
@@ -133,6 +134,9 @@ module ElasticSearchParser
         @question_mark_count += 1 
       end
 
+      value = Utility.try_downcase(value)
+      value1 = Utility.try_downcase(value1)
+
       # return immediately if pass an empty string, array hash inside
       return if value.blank?
 
@@ -181,11 +185,8 @@ module ElasticSearchParser
           end
       return if sub_query.blank?
 
-      routings           = Configuration.query_routing(sub_query, @options[:elastic_search])
-      params[:indexes]   = Configuration.query_index(sub_query, @options[:elastic_search])
-
-      return if routings.nil?
-      params[:routings] += routings.blank? ? [nil] : routings
+      params[:indexes]  = Configuration.query_index(sub_query, @options[:elastic_search])
+      params[:routings] = Array(Configuration.query_routing(sub_query, @options[:elastic_search]))
     end
 
     def searchable_fields
@@ -193,7 +194,7 @@ module ElasticSearchParser
       @options[:elastic_search][:searchable_fields].each do |key, value|
         case value
           when Array, String
-            ret[key] = value
+            ret[key] = key
           when Hash
             # everything that contains a dot will be regarded as a nested field
             # TODO: need to update the code here
