@@ -1,6 +1,6 @@
 # ElasticSearchParser
 
-To parse the active record style query to the dsl of elatic search
+To parse the active record style query to the dsl of elastic search
 
 ## Installation
 

@@ -1,24 +1,30 @@
 module ElasticSearchParser
   class QueryParser
     extend Memoist
+    include DSL::Parser
     QUERY_OPERATIONS = %i(lte lt gte gt term terms query prefix missing exists)
-    attr_reader :query, :routing, :index, :params
+    attr_reader :query, :routing, :index, :body, :url
     def initialize(conditions, options = {})
-      raise ArgumentError.new('Input must be an array!') unless conditions.is_a?(Array)
-      @dsl = conditions[0]
-      raise ArgumentError.new(' must be a valid string!') unless self.valid_dsl?
-      @values              = conditions.from(1)
-      @cache               = {}
-      # TODO: need to add the routings
       @routings            = []
       @indexes             = []
-      @question_mark_count = 0
-      @options             = options.dup.with_indifferent_access
-      @query               = self.process
-      @routings.clear if @routings.include?(nil)
-      @routing             = @routings.uniq.join(',')
-      @index               = @indexes.uniq.join(',')
-      @params              = {:query => @query}
+      case conditions
+        when Array
+          @cache               = {}
+          @dsl                 = conditions[0]
+          @values              = conditions.from(1)
+          raise ArgumentError.new(' must be a valid string!') unless self.valid_dsl?
+          @question_mark_count = 0
+          @options             = options.dup.with_indifferent_access
+          @query               = self.process
+          @body                = {:query => {:filtered => {:filter => @query}}}
+        when NilClass
+        else
+          raise ArgumentError.new('The input is not valid!')
+      end
+      @routings.include?([]) ? @routings.clear : @routings.flatten!
+      @routing = @routings.uniq.join(',') if @routings.present?
+      @index   = @indexes.flatten.uniq.join(',') if @indexes.present?
+      @url     = Configuration.url(@indexes, @options[:elastic_search])
     end
     def process
       return {} if (dsl = self.parse_dsl(@dsl)).blank?
@@ -30,7 +36,12 @@ module ElasticSearchParser
       should = dsl.split(/ or /i).map do |or_clause|
         or_params = {:routings => [], :indexes => [], :top => params[:top]}
         ret = self.parse_and(or_clause, or_params)
-        [:routings, :indexes].each { |key| params[key].replace(params[key] + or_params[key]) }
+        if params[:top]
+          params[:routings] << or_params[:routings]
+        else
+          params[:routings] += or_params[:routings]
+        end
+        params[:indexes].replace(params[:indexes] + or_params[:indexes])
         ret
       end.reject(&:blank?)
       # TODO: check the size == 0
@@ -50,12 +61,9 @@ module ElasticSearchParser
             params[key].replace(params[key] & and_params[key])
           end
         end
-
+        return if ret.blank?
         ret
       end
-
-      # add routing and index here
-
 
       # add the nested query here
       if params[:top]
@@ -71,7 +79,6 @@ module ElasticSearchParser
       # TODO: check the size == 0
       must.size == 1 ? must[0] : {:bool => {:must => must}}
     end
-
     #
     # TODO: still can be optimized
     def nest_query_objects(field, query)
@@ -99,7 +106,7 @@ module ElasticSearchParser
       end
       ret
     end
-  
+
     def translate(and_clause, params)
       key, value = and_clause.squeeze(' ').split(/>=|<=|=|<|>| between | in | begins_with | like | is /i).map(&:strip)
       value1     = nil
@@ -126,6 +133,12 @@ module ElasticSearchParser
         value = @values[@question_mark_count]
         @question_mark_count += 1 
       end
+
+      value = Utility.try_downcase(value)
+      value1 = Utility.try_downcase(value1)
+
+      # return immediately if pass an empty string, array hash inside
+      return if value.blank?
 
       key = self.searchable_fields[key]
       ret =
@@ -158,7 +171,7 @@ module ElasticSearchParser
       puts err.backtrace
       raise ArgumentError.new('Cannot parse the input!')
     end
-  
+
     def update_query_params(query, params)
       sub_query =
           case
@@ -172,65 +185,8 @@ module ElasticSearchParser
           end
       return if sub_query.blank?
 
-      routings           = Configuration.query_routing(sub_query, @options[:elastic_search])
-      params[:indexes]   = Configuration.query_index(sub_query, @options[:elastic_search])
-
-      return if routings.nil?
-      params[:routings] += routings.blank? ? [nil] : routings
-    end
-
-  
-    # return is an array
-    def parse_dsl(dsl)
-      while dsl[0] == '(' && dsl[-1] == ')'
-        dsl = dsl[1...-1] 
-      end
-      return dsl if dsl.count('(') == 0
-  
-      last_right_index = -1
-      ret = []
-      i   = 0
-      begin
-        # next if it's not a bracket
-        next if dsl[i] != '(' && (i += 1)
-
-        # find the corresponding right bracket
-        right_bracket_index = corresponding_right_bracket_index(dsl, i)
-        replacing_string    = self.random_string
-        internal_dsl        = self.parse_dsl(dsl[(i + 1)...right_bracket_index])
-        ret << dsl[(last_right_index + 1)...i]
-        ret << replacing_string
-        i = right_bracket_index + 1
-        @cache[replacing_string] = internal_dsl
-      end while i < dsl.size
-      ret.join(' ')
-    end
-    def valid_dsl?
-      return unless @dsl.is_a?(String) || @dsl.empty?
-      left_bracket_count = 0
-      @dsl.each_char do |c|
-        case c
-          when '(' then left_bracket_count += 1
-          when ')' then left_bracket_count -= 1
-        end
-        return if left_bracket_count < 0
-      end
-      true
-    end
-  
-    def corresponding_right_bracket_index(dsl, left_index)
-      left_bracket_count = 1
-      (left_index + 1).upto(dsl.size - 1) do |index|
-        case dsl[index]
-          when '(' then left_bracket_count += 1
-          when ')' then left_bracket_count -= 1
-        end
-        return index if left_bracket_count == 0
-      end
-    end
-  
-    def random_string
-      (0..10).map{('a'..'z').to_a.sample}.join
+      params[:indexes]  = Configuration.query_index(sub_query, @options[:elastic_search])
+      params[:routings] = Array(Configuration.query_routing(sub_query, @options[:elastic_search]))
     end
 
     def searchable_fields
@@ -238,7 +194,7 @@ module ElasticSearchParser
       @options[:elastic_search][:searchable_fields].each do |key, value|
         case value
           when Array, String
-            ret[key] = value
+            ret[key] = key
           when Hash
             # everything that contains a dot will be regarded as a nested field
             # TODO: need to update the code here
@@ -261,6 +217,7 @@ module ElasticSearchParser
       puts err.backtrace
       raise ArgumentError.new('Failed to parse the searchable_fields!')
     end; memoize :searchable_fields
+
     def nested_fields
       @options[:elastic_search][:searchable_fields].map do |key, value|
         key if value.is_a?(Hash) && value[:nested]

@@ -1,6 +1,7 @@
 module ElasticSearchParser
   class IndexParser
     extend Memoist
+    attr_reader :items
     # this class generates the convert the object hash to the correct
     # mapping format when indexing the documents
     def initialize(entry_hash, options)
@@ -12,7 +13,6 @@ module ElasticSearchParser
 
     def process
       return @options[:lambda].call(@entry_hash) if @options[:lambda]
-
       self.final_value
     rescue => err
       raise ArgumentError.new("Error when generating the document: #{err.message}")
@@ -25,20 +25,18 @@ module ElasticSearchParser
     def middle_value
       ret = HashWithIndifferentAccess.new
       @es_options[:searchable_fields].each do |field, config|
-        if @es_options[:user_defined_index].andand[field]
-          ret = @es_options[:user_defined_index].andand[field].call(@entry_hash)
-          next
-        end
+        # if the user pass a block or lambda for generating the index
+        next if self.user_defined_index?(field, ret)
         case config
           when String
             raise ArgumentError.new("#{config} is not part of the schema") if self.schema[config].nil?
-            ret[field] = @entry_hash[config]
+            ret[field] = Utility.try_downcase(@entry_hash[config])
           when Array
             ret[field] = config.map do |f|
               raise ArgumentError.new("#{config} is not part of the schema") if self.schema[f].nil?
               next if @entry_hash[f].nil?
               Array(@entry_hash[f])
-            end.flatten
+            end.flatten.map{|t| Utility.try_downcase(t)}.compact
           when Hash
             object_field = config[:path]
             raise ArgumentError.new("#{config} is not part of the schema") if self.schema[object_field].nil?
@@ -50,9 +48,17 @@ module ElasticSearchParser
               else
                 ret[field] = self.complex_object(@entry_hash, config)
             end
+          else
+            raise ArgumentError
         end
       end
       ret.delete_if{|_, v| v.blank?}
+    end
+
+    def user_defined_index?(field, ret)
+      return unless @es_options[:user_defined_index].andand[field]
+      ret[field] = @es_options[:user_defined_index].andand[field].call(@entry_hash)
+      true
     end
 
     #############################################################
@@ -65,7 +71,6 @@ module ElasticSearchParser
         data    = middle_value.merge(shard_key => shard_value)
         index   = Configuration.transaction_index({shard_key => shard_value}, @es_options)
         type    = Configuration.type(@es_options)
-        #TODO: id haven't been added yet
         id      = Configuration.document_id(data, @es_options)
         routing = Configuration.transaction_routing(data, @es_options)
         {:data => data, :_index => index, :_type => type, :_routing => routing, :_id => id}.delete_if{|_, v| v.blank?}
@@ -76,9 +81,9 @@ module ElasticSearchParser
     def complex_object(object, config)
       if config[:nested]
         # returns a hash
-        {}.tap { |h| config[:fields].each { |k, v| h[k] = object[v] if object[v].present? } }
+        {}.tap { |h| config[:fields].each { |k, v| h[k] = Utility.try_downcase(object[v]) if object[v].present? } }
       else
-        object[config[:field]]
+        Utility.try_downcase(object[config[:field]])
       end
     end
 
@@ -89,6 +94,5 @@ module ElasticSearchParser
         end
       end
     end; memoize :schema
-
   end
 end
